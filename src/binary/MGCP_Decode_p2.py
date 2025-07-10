@@ -2,15 +2,15 @@ import numpy as np
 from reedsolo import RSCodec
 import reedsolo
 import math
+from CalculateProbas import CalculateProbas
 
-def MGCP_Decode_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period):
+def MGCP_Decode_p2(y, n, k, l, N, K, c1, c2, q, t, maxSize, marker_period, P0, Pd, Pi, Ps):
     # Initializations
     uhat = []
     delta = len(y) - n
     size_sub = 0
     final_sub_deletion_patterns1 = []
     d = []
-
     markerSize = 3
     num_blocks = K + c1
     num_markers = math.ceil(num_blocks // 2)
@@ -37,7 +37,6 @@ def MGCP_Decode_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period):
             lengths[i] += markerSize
 
         Y = divide_vector(yE, lengths, 3)
-
         if Y:
             Y.extend(Par)
             ones_positions = list(range(N - c2, N))
@@ -55,16 +54,19 @@ def MGCP_Decode_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period):
                     return uhat
     
     # Trellis Calculation
-
+    
     #D = np.arange(-3, 4)
     #D = np.sort(np.abs(D))    
     #for z in D:
     #delta = len(y) - n + z
-
-    delta = len(y) - n
+  
+    
+    d = deletion_error_location(y, K//marker_period, delta, l*marker_period, 3, c1//marker_period, P0, Pd, Pi, Ps)
+    #print(d)
+    delta = sum(d)
     yE = y[:(num_blocks * l) + (num_markers * markerSize) + delta]
-    d = deletion_error_location(yE, L, K//marker_period, delta, l*marker_period, 3, c1//marker_period)
-    d = arrange_pattern(d, marker_period, K + c1)
+
+    d = arrange_pattern(d)
     d1 = d
 
     # Phase 1: Quick Check
@@ -74,8 +76,8 @@ def MGCP_Decode_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period):
 
     lengths = lengths + d
     Y = divide_vector(yE, lengths, 3)
-    size_sub += 1
 
+    size_sub += 1
     if Y:
         Y.extend(Par)
         erasure_pattern = [0] * (N - c2) + [1] * (c2)
@@ -139,7 +141,7 @@ def MGCP_Decode_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period):
         all_sub_deletion_patterns1.append(sub_deletion_patterns)
 
     # Generate all combinations of sub-deletion patterns from different cells
-    final_sub_deletion_patterns1 = generate_combinations(all_sub_deletion_patterns1, l)
+    final_sub_deletion_patterns1 = generate_combinations(all_sub_deletion_patterns1, l, maxSize*10)
     size_sub += len(final_sub_deletion_patterns1)
 
     # Check all patterns generated after local apportionment
@@ -149,7 +151,7 @@ def MGCP_Decode_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period):
             continue
         uhat, valid = check_pattern(yE, d2, K, c1, c2, l, q, Par, rsDecoder, rsEncoder, N,num_blocks,markerSize)
         if valid:
-            return uhat     
+            return uhat  
                   
     # Phase 3: Last Try
     while sum(d1) != delta:
@@ -184,6 +186,8 @@ def MGCP_Decode_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period):
 
                         if Uhat:                
                             Xhat = list(rsEncoder.encode(Uhat))
+                            #print(f"X2:{Xhat}")
+                            #print(f"S2:{Xhat[K + c1 : K + c1 + c2]}")
                             if Xhat[K + c1 : K + c1 + c2] == Par:
                                 uhat_blocks = decimal_to_binary_blocks(Uhat, l)
                                 uhat = [int(bit) for block in uhat_blocks for bit in block]
@@ -228,13 +232,14 @@ def MGCP_Decode_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period):
                     all_sub_deletion_patterns1.append(sub_deletion_patterns)
 
                 # Generate all combinations of sub-deletion patterns from different cells
-                final_sub_deletion_patterns1 = generate_combinations(all_sub_deletion_patterns1, l)
+                final_sub_deletion_patterns1 = generate_combinations(all_sub_deletion_patterns1, l, maxSize*10)
                 size_sub += len(final_sub_deletion_patterns1)
-
                 # Check all patterns generated after local apportionment
                 for pattern_idx in range(min(len(final_sub_deletion_patterns1), maxSize)):
                     d1 = final_sub_deletion_patterns1[pattern_idx].astype(int).tolist()
-
+                    '''
+                    print(f"D:{d2}")
+                    '''
                     if not d1:
                         continue
                     uhat, valid = check_pattern(yE, d1, K, c1, c2, l, q, Par, rsDecoder, rsEncoder, N,num_blocks,markerSize)
@@ -310,23 +315,26 @@ def divide_vector(x, y, marker_size):
     return Y
 
 # Function to locate deletion error
-def deletion_error_location(r, L, v, delta, block_size, l, c1):
+def deletion_error_location(r, v, delta, block_size, l, c1, P0, Pd, Pi, Ps):
 
     v += c1
 
-    max_shift_per_block = 2
     max_delta = abs(delta) + 2
+    max_shift_per_block = max_delta
 
     P = np.zeros((v + 1, 2 * max_delta + 1))
     Q = np.zeros((v + 1, 2 * max_delta + 1))
     P[0, max_delta] = 1  # Initial state with zero shift
 
+    # Recalculate L matrix for current error probabilities
+    L = np.zeros((8, 2*max_delta + 1))
+    for m_prime in range(8):
+        for shift in range(-max_delta, max_delta + 1):
+            L[m_prime, shift + max_delta] = CalculateProbas(m_prime, shift, block_size, P0, Pd, Pi, Ps)
+
     # Phase 1: Compute likelihoods and record preceding states
     for i in range(1, v + 1):
         for omega in range(-max_delta, max_delta + 1):
-
-            if i==v and omega != delta:
-                continue
 
             current_m = decode_rib(r, i - 1, omega, block_size, l)
 
@@ -335,7 +343,7 @@ def deletion_error_location(r, L, v, delta, block_size, l, c1):
 
             m_idx = int(''.join(map(str, current_m)), 2)
 
-            max_val = -np.inf
+            max_val = 0.0
             best_mu = 0
             for mu_prime in range(-max_shift_per_block, max_shift_per_block + 1):
                 prev_omega = omega - mu_prime
@@ -357,7 +365,8 @@ def deletion_error_location(r, L, v, delta, block_size, l, c1):
 
     # Phase 2: Trace the optimal path
     Z = np.zeros(v + 1, dtype=int)
-    Z[-1] = delta
+    Z[-1] = np.argmax(P[-1, :]) - max_delta
+    #Z[-1] = delta
 
     d = np.zeros(v, dtype=int)
     for i in range(v, 0, -1):
@@ -390,7 +399,6 @@ def expand_deletion_pattern1(d, v):
             end = int(min(v, i + expansion + 1))
             expanded_d[start:end] = 1
     return expanded_d
-
 
 def generate_sub_deletion_patterns1(expanded_pattern, partial_pattern):
     v = len(expanded_pattern)
@@ -437,6 +445,8 @@ def generate_cluster_patterns1(total_edits, cluster_length, expanded_cluster):
         cluster_patterns.append(sub_pattern)
     return np.array(cluster_patterns)
 
+
+
 def partition_with_limit1(total_edits, cluster_length, deletion=False):
     from itertools import combinations_with_replacement
 
@@ -480,27 +490,54 @@ def combine_cluster_patterns(cluster_patterns, v, expanded_pattern):
 
     return combined_patterns
 
-def generate_combinations(all_sub_deletion_patterns, l):
-    b = l + 4
-    num_sets = len(all_sub_deletion_patterns)
+def generate_combinations(all_sets, l, limit=None):
+    b = l + 3
+    num_sets = len(all_sets)
     combinations = []
 
-    def recursive_combinations(current_combination, set_idx):
-        if set_idx >= num_sets:
-            if not current_combination:  # Avoid stacking an empty combination
+    def rec(stack, i):
+        # Use outer-scope 'combinations' and 'limit'
+        if limit is not None and len(combinations) >= limit:
+            return                                # hard stop
+
+        if i == num_sets:
+            if not stack:
                 return
-            sum_pattern = np.sum(np.vstack(current_combination), axis=0)
-            if np.all(sum_pattern <= b):
-                combinations.append(sum_pattern)
+            s = np.sum(np.vstack(stack), axis=0)
+            if np.all(s <= b):
+                combinations.append(s)
             return
 
-        for pattern in all_sub_deletion_patterns[set_idx]:
-            new_combination = list(current_combination)
-            new_combination.append(pattern)
-            recursive_combinations(new_combination, set_idx + 1)
+        for pat in all_sets[i]:
+            if limit is not None and len(combinations) >= limit:
+                break                             # early exit
+            rec(stack + [pat], i + 1)
 
-    recursive_combinations([], 0)
+    rec([], 0)
     return combinations
+
+#def generate_combinations(all_sub_deletion_patterns, l):
+#    b = l + 4
+#    num_sets = len(all_sub_deletion_patterns)
+#    combinations = []
+#
+#    def recursive_combinations(current_combination, set_idx):
+#        if set_idx >= num_sets:
+#            if not current_combination:  # Avoid stacking an empty combination
+#                return
+#            sum_pattern = np.sum(np.vstack(current_combination), axis=0)
+#            if np.all(sum_pattern <= b):
+#                combinations.append(sum_pattern)
+#            return
+#
+#        for pattern in all_sub_deletion_patterns[set_idx]:
+#            new_combination = list(current_combination)
+#            new_combination.append(pattern)
+#            recursive_combinations(new_combination, set_idx + 1)
+#
+#    recursive_combinations([], 0)
+#    return combinations
+
 
 def decimal_to_binary_blocks(decimal_list, block_length):
     # Convert each decimal number to binary with fixed block length
@@ -536,6 +573,13 @@ def check_pattern(yE, d, K, c1, c2, l, q, Par, rsDecoder, rsEncoder, N,num_block
                     return uhat, True
     return None, False
 
+def arrange_pattern(lst):
+    result = []
+    for item in lst:
+        result.extend([0, item])
+    return result
+
+'''
 def arrange_pattern(d, marker_period, num_blocks):
     """
     Arrange a deletion pattern based on marker period and number of blocks.
@@ -578,3 +622,4 @@ def arrange_pattern(d, marker_period, num_blocks):
             break
 
     return arranged_d
+'''
