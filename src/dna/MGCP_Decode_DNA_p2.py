@@ -2,14 +2,19 @@ import numpy as np
 from reedsolo import RSCodec
 import reedsolo
 import math
+from CalculateProbas import CalculateProbas
 
-def MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period):
+def MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, maxSize, marker_period, P0, Pd, Pi, Ps):
     # Initializations
     uhat = []
     delta = len(y) - n
+    flag = (c1 + c2) % 2 != 0
+    flag=0
     size_sub = 0
     final_sub_deletion_patterns1 = []
+    errs=0
     d = []
+    d_arr=[]
     markerSize = 2
 
     # RS encoder setup
@@ -24,7 +29,14 @@ def MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period
     # Decode check parities
     seg = y_bin[-c2 * l * t:]
     p = rep_decode_gamma(seg, t, c2 * l)
+    #print(f"decoded parity:{p}")
+    # A = p.reshape((l, c2))
     Par = binary_to_decimal_blocks(p, l)
+    #print(Par)
+    '''
+    if flag:
+        Par += [0]
+    '''
 
     # Fast check
     if delta == 0:
@@ -36,39 +48,48 @@ def MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period
         for i in range(1, K + c1, 2):  # Python indexing starts at 0, so adjust the range
             lengths[i] += 4  # Add 4 to the length at every 2nd block
 
+
         Y = divide_vector(yE, lengths, 4)
 
+        #print(f"Y1:{Y}")
         if Y:
             Y.extend(Par)
-            ones_positions = list(range(N - c2, N ))
+            ones_positions = list(range(N - c2, N + flag))
+            #ones_positions = [i for i, value in enumerate(erasure_pattern) if value == 1]
 
             try:
                 Uhat = list(rsDecoder.decode(Y,erase_pos=ones_positions)[0])
             except reedsolo.ReedSolomonError as e:
-                Uhat = None
+                Uhat, errs = None, -1
 
-            if Uhat:
+            if Uhat and errs != -1:
                 Xhat = list(rsEncoder.encode(Uhat))
+                #print(f"X1:{Xhat}")
+                #print(f"S1:{Xhat[K + c1 : K + c1 + c2]}")
                 if Xhat[K + c1 : K + c1 + c2] == Par:
                     uhat_blocks = decimal_to_binary_blocks(Uhat, l)
                     uhat = [int(bit) for block in uhat_blocks for bit in block]
-                    return uhat  
+                    return uhat, size_sub, final_sub_deletion_patterns1, d
+    
+    
 
     # Trellis Calculation
 
-    #D = np.arange(-3, 4)
-    #D = np.sort(np.abs(D))    
-    #for z in D:
-    #delta = len(y) - n + z
-
-    delta = len(y) - n
     num_blocks = K + c1 
     num_markers = math.ceil(num_blocks // 2)
+    d = deletion_error_location(y, K//marker_period, delta, l*marker_period, 2, c1//marker_period, P0, Pd, Pi, Ps)
+    delta=sum(d)
     yE = y[:(num_blocks * l//2) + (num_markers * markerSize) + delta]
-    d = deletion_error_location(yE, L, K//marker_period, delta, l*marker_period, 2, c1//marker_period)
-    d = arrange_pattern(d, marker_period, K + c1)
+
+
+    d = arrange_pattern(d)
     d1 = d
 
+    '''
+    print("Decoding Start:")
+    print(f"O:{d}")
+    '''
+    
     # Phase 1: Quick Check
     lengths = np.ones(num_blocks, dtype=int) * (l // 2)
     for i in range(1, K + c1, 2): 
@@ -77,10 +98,11 @@ def MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period
     lengths = lengths + d
     Y = divide_vector_dna(yE, lengths, 2)
 
+    #print(f"Y2:{Y}")
     size_sub += 1
     if Y:
         Y.extend(Par)
-        erasure_pattern = [0] * (N - c2) + [1] * (c2)
+        erasure_pattern = [0] * (N - c2) + [1] * (c2 + flag)
         for i in range(len(d)):
             if d[i] != 0:
                 erasure_pattern[i] = 1
@@ -92,14 +114,16 @@ def MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period
             try:
                 Uhat = list(rsDecoder.decode(Y,erase_pos=ones_positions)[0])
             except reedsolo.ReedSolomonError as e:
-                Uhat = None
+                Uhat, errs = None, -1
 
-            if Uhat:                
+            if Uhat and errs != -1:                
                 Xhat = list(rsEncoder.encode(Uhat))
+                #print(f"X2:{Xhat}")
+                #print(f"S2:{Xhat[K + c1 : K + c1 + c2]}")
                 if Xhat[K + c1 : K + c1 + c2] == Par:
                     uhat_blocks = decimal_to_binary_blocks(Uhat, l)
                     uhat = [int(bit) for block in uhat_blocks for bit in block]
-                    return uhat
+                    return uhat, size_sub, final_sub_deletion_patterns1, d
 
     # Phase 2: Local Apportionment
 
@@ -141,36 +165,49 @@ def MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period
         all_sub_deletion_patterns1.append(sub_deletion_patterns)
 
     # Generate all combinations of sub-deletion patterns from different cells
-    final_sub_deletion_patterns1 = generate_combinations(all_sub_deletion_patterns1, l)
+    final_sub_deletion_patterns1 = generate_combinations(all_sub_deletion_patterns1, l, maxSize*10)
     size_sub += len(final_sub_deletion_patterns1)
-
+    '''
+    for pattern_idx in range(min(len(final_sub_deletion_patterns1), maxSize)):
+        a = (final_sub_deletion_patterns1[pattern_idx].astype(int)).tolist()
+        print(f"P:{a}")
+    '''
     # Check all patterns generated after local apportionment
     for pattern_idx in range(min(len(final_sub_deletion_patterns1), maxSize)):
         d2 = final_sub_deletion_patterns1[pattern_idx].astype(int).tolist()
+        '''
+        print(f"D:{d2}")
+        '''
         if not d2:
             continue
-        uhat, valid = check_pattern(yE, d2, K, c1, c2, l, q, Par, rsDecoder, rsEncoder, N,num_blocks,markerSize)
+        uhat, valid = check_pattern(yE, d2, K, c1, c2, l, q, Par, rsDecoder, rsEncoder, flag, N,num_blocks,markerSize)
         if valid:
-            return uhat       
+            return uhat, size_sub, final_sub_deletion_patterns1, d2
+        
+    #return uhat, size_sub, final_sub_deletion_patterns1, d
                   
     # Phase 3: Last Try
     while sum(d1) != delta:
         # Start from the end and work backwards
         for i in range(len(d1) - 1, -1, -1):
             if d1[i] != 0:
+                #print(delta)
+                #print(d1)
                 d1[i] = 0  # Set element to zero
                 
             # Check if sum is now equal to delta
             if sum(d1) == delta:
+                #print("true")
                 lengths = np.ones(num_blocks, dtype=int) * (l // 2)
                 for i in range(1, K + c1, 2): 
                     lengths[i] += markerSize
                 lengths = lengths + d1
                 Y = divide_vector_dna(yE, lengths, 2)
+                #print(f"Y2:{Y}")
                 size_sub += 1
                 if Y:
                     Y.extend(Par)
-                    erasure_pattern = [0] * (N - c2) + [1] * (c2)
+                    erasure_pattern = [0] * (N - c2) + [1] * (c2 + flag)
                     for i in range(len(d1)):
                         if d1[i] != 0:
                             erasure_pattern[i] = 1
@@ -182,15 +219,17 @@ def MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period
                         try:
                             Uhat = list(rsDecoder.decode(Y,erase_pos=ones_positions)[0])
                         except reedsolo.ReedSolomonError as e:
-                            Uhat = None
+                            Uhat, errs = None, -1
 
-                        if Uhat:                
+                        if Uhat and errs != -1:                
                             Xhat = list(rsEncoder.encode(Uhat))
+                            #print(f"X2:{Xhat}")
+                            #print(f"S2:{Xhat[K + c1 : K + c1 + c2]}")
                             if Xhat[K + c1 : K + c1 + c2] == Par:
                                 uhat_blocks = decimal_to_binary_blocks(Uhat, l)
                                 uhat = [int(bit) for block in uhat_blocks for bit in block]
-                                return uhat
-                            
+                                return uhat, size_sub, final_sub_deletion_patterns1, d1
+        
                 # Local Apportionment
                 consecutive_sequences = []
                 current_sequence = []
@@ -230,9 +269,13 @@ def MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period
                     all_sub_deletion_patterns1.append(sub_deletion_patterns)
 
                 # Generate all combinations of sub-deletion patterns from different cells
-                final_sub_deletion_patterns1 = generate_combinations(all_sub_deletion_patterns1, l)
+                final_sub_deletion_patterns1 = generate_combinations(all_sub_deletion_patterns1, l, maxSize*10)
                 size_sub += len(final_sub_deletion_patterns1)
-
+                '''
+                for pattern_idx in range(min(len(final_sub_deletion_patterns1), maxSize)):
+                    a = (final_sub_deletion_patterns1[pattern_idx].astype(int)).tolist()
+                    print(f"P:{a}")
+                '''
                 # Check all patterns generated after local apportionment
                 for pattern_idx in range(min(len(final_sub_deletion_patterns1), maxSize)):
                     d1 = final_sub_deletion_patterns1[pattern_idx].astype(int).tolist()
@@ -241,15 +284,16 @@ def MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period
                     '''
                     if not d1:
                         continue
-                    uhat, valid = check_pattern(yE, d1, K, c1, c2, l, q, Par, rsDecoder, rsEncoder, N,num_blocks,markerSize)
+                    uhat, valid = check_pattern(yE, d1, K, c1, c2, l, q, Par, rsDecoder, rsEncoder, flag, N,num_blocks,markerSize)
                     if valid:
-                        return uhat
+                        return uhat, size_sub, final_sub_deletion_patterns1, d1
                 
             # If the pattern becomes all zeros and we still don't have sum(d) == delta
             if all(value == 0 for value in d1) and sum(d1) != delta:
-                return uhat
+                #break
+                return uhat, size_sub, final_sub_deletion_patterns1, d1
                            
-    return uhat
+    return uhat, size_sub, final_sub_deletion_patterns1, d
 
 def binary_to_decimal_blocks(binary_message, block_length):
 
@@ -314,23 +358,28 @@ def divide_vector(x, y, marker_size):
     return Y
 
 # Function to locate deletion error
-def deletion_error_location(r, L, v, delta, block_size, l, c1):
+def deletion_error_location(r, v, delta, block_size, l, c1, P0, Pd, Pi, Ps):
 
     v += c1
 
-    max_shift_per_block = 2
     max_delta = abs(delta) + 2
+    max_shift_per_block = max_delta
 
     P = np.zeros((v + 1, 2 * max_delta + 1))
     Q = np.zeros((v + 1, 2 * max_delta + 1))
     P[0, max_delta] = 1  # Initial state with zero shift
 
+    L = np.zeros((6, 2*max_delta + 1))
+    for m_prime in range(6):
+        for shift in range(-max_delta, max_delta + 1):
+            L[m_prime, shift + max_delta] = CalculateProbas(m_prime,shift,block_size // 2,P0, Pd, Pi, Ps)
+
     # Phase 1: Compute likelihoods and record preceding states
     for i in range(1, v + 1):
         for omega in range(-max_delta, max_delta + 1):
 
-            if i==v and omega != delta:
-                continue
+            #if i==v and omega != delta:
+            #    continue
 
             current_m = decode_rib(r, i - 1, omega, block_size // 2, l)
 
@@ -361,7 +410,8 @@ def deletion_error_location(r, L, v, delta, block_size, l, c1):
 
     # Phase 2: Trace the optimal path
     Z = np.zeros(v + 1, dtype=int)
-    Z[-1] = delta
+    Z[-1] = np.argmax(P[-1, :]) - max_delta
+    #Z[-1] = delta
 
     d = np.zeros(v, dtype=int)
     for i in range(v, 0, -1):
@@ -408,6 +458,7 @@ def expand_deletion_pattern1(d, v):
             expanded_d[start:end] = 1
     return expanded_d
 
+
 def generate_sub_deletion_patterns1(expanded_pattern, partial_pattern):
     v = len(expanded_pattern)
     cluster_patterns = []
@@ -438,6 +489,7 @@ def generate_sub_deletion_patterns1(expanded_pattern, partial_pattern):
     sub_deletion_patterns = combine_cluster_patterns(cluster_patterns, v, expanded_pattern)
     return np.unique(sub_deletion_patterns, axis=0)
 
+
 def generate_cluster_patterns1(total_edits, cluster_length, expanded_cluster):
     # Handle the case of negative total_edits (deletions > insertions)
     if total_edits < 0:
@@ -452,6 +504,8 @@ def generate_cluster_patterns1(total_edits, cluster_length, expanded_cluster):
         sub_pattern[np.nonzero(expanded_cluster)] = pattern[np.nonzero(expanded_cluster)]
         cluster_patterns.append(sub_pattern)
     return np.array(cluster_patterns)
+
+
 
 def partition_with_limit1(total_edits, cluster_length, deletion=False):
     from itertools import combinations_with_replacement
@@ -475,6 +529,8 @@ def partition_with_limit1(total_edits, cluster_length, deletion=False):
 
     return np.array(partitions)
 
+
+
 def combine_cluster_patterns(cluster_patterns, v, expanded_pattern):
     if not cluster_patterns:
         return np.array([])
@@ -496,27 +552,54 @@ def combine_cluster_patterns(cluster_patterns, v, expanded_pattern):
 
     return combined_patterns
 
-def generate_combinations(all_sub_deletion_patterns, l):
+def generate_combinations(all_sets, l, limit=None):
     b = l + 4
-    num_sets = len(all_sub_deletion_patterns)
+    num_sets = len(all_sets)
     combinations = []
 
-    def recursive_combinations(current_combination, set_idx):
-        if set_idx >= num_sets:
-            if not current_combination:  # Avoid stacking an empty combination
+    def rec(stack, i):
+        # Use outer-scope 'combinations' and 'limit'
+        if limit is not None and len(combinations) >= limit:
+            return                                # hard stop
+
+        if i == num_sets:
+            if not stack:
                 return
-            sum_pattern = np.sum(np.vstack(current_combination), axis=0)
-            if np.all(sum_pattern <= b):
-                combinations.append(sum_pattern)
+            s = np.sum(np.vstack(stack), axis=0)
+            if np.all(s <= b):
+                combinations.append(s)
             return
 
-        for pattern in all_sub_deletion_patterns[set_idx]:
-            new_combination = list(current_combination)
-            new_combination.append(pattern)
-            recursive_combinations(new_combination, set_idx + 1)
+        for pat in all_sets[i]:
+            if limit is not None and len(combinations) >= limit:
+                break                             # early exit
+            rec(stack + [pat], i + 1)
 
-    recursive_combinations([], 0)
+    rec([], 0)
     return combinations
+
+
+# def generate_combinations(all_sub_deletion_patterns, l):
+#     b = l + 4
+#     num_sets = len(all_sub_deletion_patterns)
+#     combinations = []
+
+#     def recursive_combinations(current_combination, set_idx):
+#         if set_idx >= num_sets:
+#             if not current_combination:  # Avoid stacking an empty combination
+#                 return
+#             sum_pattern = np.sum(np.vstack(current_combination), axis=0)
+#             if np.all(sum_pattern <= b):
+#                 combinations.append(sum_pattern)
+#             return
+
+#         for pattern in all_sub_deletion_patterns[set_idx]:
+#             new_combination = list(current_combination)
+#             new_combination.append(pattern)
+#             recursive_combinations(new_combination, set_idx + 1)
+
+#     recursive_combinations([], 0)
+#     return combinations
 
 # DNA to binary conversion
 def dna_to_binary(dna_seq):
@@ -573,7 +656,7 @@ def decimal_to_binary_blocks(decimal_list, block_length):
     # Convert each decimal number to binary with fixed block length
     return [f"{x:0{block_length}b}" for x in decimal_list]
 
-def check_pattern(yE, d, K, c1, c2, l, q, Par, rsDecoder, rsEncoder, N,num_blocks,markerSize):
+def check_pattern(yE, d, K, c1, c2, l, q, Par, rsDecoder, rsEncoder, flag, N,num_blocks,markerSize):
     """
     Function to perform the quick check on a given pattern `d`.
     """
@@ -583,11 +666,11 @@ def check_pattern(yE, d, K, c1, c2, l, q, Par, rsDecoder, rsEncoder, N,num_block
 
     lengths = lengths + d
     Y = divide_vector_dna(yE, lengths, 2)
-
+    #print(f"Y3:{Y}")
     if Y:
         Y.extend(Par)       
         non_zero_positions = [index for index, value in enumerate(d) if value != 0]
-        non_zero_positions += list(range(N - c2, N))
+        non_zero_positions += list(range(N - c2, N + flag))
 
         if np.count_nonzero(d) <= c1:
             Y = [0 if value > q - 1 else value for value in Y]
@@ -598,12 +681,21 @@ def check_pattern(yE, d, K, c1, c2, l, q, Par, rsDecoder, rsEncoder, N,num_block
 
             if Uhat:
                 Xhat = list(rsEncoder.encode(Uhat))
+                #print(f"X3:{Xhat}")
+                #print(f"S3:{Xhat[K + c1 : K + c1 + c2]}")
                 if Xhat[K + c1 : K + c1 + c2] == Par:
                     uhat_blocks = decimal_to_binary_blocks(Uhat, l)
                     uhat = [int(bit) for block in uhat_blocks for bit in block]
                     return uhat, True
     return None, False
 
+def arrange_pattern(lst):
+    result = []
+    for item in lst:
+        result.extend([0, item])
+    return result
+
+'''
 def arrange_pattern(d, marker_period, num_blocks):
     """
     Arrange a deletion pattern based on marker period and number of blocks.
@@ -646,3 +738,4 @@ def arrange_pattern(d, marker_period, num_blocks):
             break
 
     return arranged_d
+'''

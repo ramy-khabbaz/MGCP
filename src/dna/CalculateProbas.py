@@ -16,7 +16,7 @@ def CalculateProbas(m_prime, shift, p, P0, Pd, Pi, Ps):
         prob = (pinfo(shift, p, Pi, Pd) * (Ps * P0 * Pr) +
                 pinfo(shift - 1, p, Pi, Pd) * (Pi * P0 * Ps) +
                 pinfo(shift + 1, p, Pi, Pd) * (2 * Pd * (P0**2) * Ps) +
-                pinfo(shift + 2, p, Pi, Pd) * ((Pd**2) * P0**2 * Pr + 2 * P0**2 * Pd**2 * Ps))
+                pinfo(shift + 2, p, Pi, Pd) * (Pd**2 * P0**2))
     elif m_prime == 2:
         prob = (pinfo(shift, p, Pi, Pd) * (Pr * Ps * P0 + Pi * Pd * P0) +
                 pinfo(shift - 1, p, Pi, Pd) * (Pi * Ps * P0) +
@@ -30,7 +30,7 @@ def CalculateProbas(m_prime, shift, p, P0, Pd, Pi, Ps):
                 pinfo(shift + 2, p, Pi, Pd) * (P0**2 * Pd**2))
     elif m_prime == 4:
         prob = (pinfo(shift, p, Pi, Pd) * (Ps**2 * P0**2) +
-                pinfo(shift + 1, p, Pi, Pd) * (P0**2 * Pr * Pd * 2) +
+                pinfo(shift + 1, p, Pi, Pd) * (P0**2 * Ps * Pd * 2) +
                 pinfo(shift + 2, p, Pi, Pd) * (P0**2 * Pd**2))
     elif m_prime == 5:
         prob = (pinfo(shift, p, Pi, Pd) * (P0 * Pi * Pd + Ps**2 * P0**2) +

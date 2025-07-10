@@ -8,7 +8,6 @@ from MGCP_Encode_DNA_p1 import MGCP_Encode_DNA_p1
 from DNA_iid_channel import DNA_iid_channel
 from MGCP_Decode_DNA_p2 import MGCP_Decode_DNA_p2
 from MGCP_Decode_DNA_p1 import MGCP_Decode_DNA_p1
-from CalculateProbas import CalculateProbas
 
 def prob_value(value):
     """Converts input to float and checks it is between 0 and 1."""
@@ -92,16 +91,11 @@ def initialize_globals(args):
     K = int(math.ceil(k / l))
     maxSize = 1000
 
-    # Build lookup table L
-    L = np.zeros((6, 5))
-    for m_prime in range(6):
-        for shift in range(-2, 3):
-            L[m_prime, shift + 2] = CalculateProbas(m_prime, shift, (l // 2) * marker_period, 0.25, args.Pd, args.Pi, args.Ps)
-    return k, l, c2, t, marker_period, K, maxSize, L
+    return k, l, c2, t, marker_period, K, maxSize
 
 def process_chunk(args_tuple):
     # Unpack parameters
-    c1, chunk_idx, chunk_size, total_iter, k, l, c2, t, marker_period, L, Pd, Pi, Ps, maxSize = args_tuple
+    c1, chunk_idx, chunk_size, total_iter, k, l, c2, t, marker_period, Pd, Pi, Ps, maxSize = args_tuple
     rng = np.random.default_rng()
     countS, countF, countE = 0, 0, 0
     decoding_time = 0
@@ -112,13 +106,13 @@ def process_chunk(args_tuple):
             x, n, N, K, q, U, X = MGCP_Encode_DNA_p1(u, l, c1, c2, t)
             y = DNA_iid_channel(x, Pd, Pi, Ps)
             start_time = time.perf_counter()
-            uhat = MGCP_Decode_DNA_p1(y, n, k, l, N, K, c1, c2, q, t, L, maxSize)
+            uhat = MGCP_Decode_DNA_p1(y, n, k, l, N, K, c1, c2, q, t, maxSize, 0.25, Pd, Pi, Ps)[0]
             decoding_time += time.perf_counter() - start_time
         else:
             x, n, N, K, q, U, X = MGCP_Encode_DNA_p2(u, l, c1, c2, t)
             y = DNA_iid_channel(x, Pd, Pi, Ps)
             start_time = time.perf_counter()
-            uhat = MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period)
+            uhat = MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, maxSize, marker_period, 0.25, Pd, Pi, Ps)[0]
             decoding_time += time.perf_counter() - start_time
         
         if uhat == u:
@@ -134,7 +128,7 @@ def main():
     args = parse_args()
     total_iter = args.iterations
     Pd, Pi, Ps = args.Pd, args.Pi, args.Ps
-    k, l, c2, t, marker_period, K, maxSize, L = initialize_globals(args)
+    k, l, c2, t, marker_period, K, maxSize = initialize_globals(args)
     
     c1_values = args.c1_values
     CHUNK_SIZE = max(1, 1000 // (cpu_count() * 4))
@@ -147,7 +141,7 @@ def main():
                 start = chunk_idx * CHUNK_SIZE
                 remaining = total_iter - start
                 current_chunk = min(CHUNK_SIZE, remaining)
-                tasks.append((c1, chunk_idx, current_chunk, total_iter, k, l, c2, t, marker_period, L, Pd, Pi, Ps, maxSize))
+                tasks.append((c1, chunk_idx, current_chunk, total_iter, k, l, c2, t, marker_period, Pd, Pi, Ps, maxSize))
         
             whole_start = time.perf_counter()
             with Pool(processes=cpu_count()) as pool:

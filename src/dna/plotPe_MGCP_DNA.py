@@ -8,7 +8,6 @@ from MGCP_Encode_DNA_p1 import MGCP_Encode_DNA_p1
 from DNA_iid_channel import DNA_iid_channel
 from MGCP_Decode_DNA_p2 import MGCP_Decode_DNA_p2
 from MGCP_Decode_DNA_p1 import MGCP_Decode_DNA_p1
-from CalculateProbas import CalculateProbas
 
 def float_value(value):
     try:
@@ -113,25 +112,19 @@ def process_chunk(args_tuple):
     Pi = coeffPi * pe
     Ps = coeffPs * pe
 
-    # Build lookup table L for these probabilities.
-    L = np.zeros((6, 5))
-    for m_prime in range(6):
-        for shift in range(-2, 3):
-            L[m_prime, shift + 2] = CalculateProbas(m_prime, shift, (l // 2) * marker_period, P0, Pd, Pi, Ps)
-
     for _ in range(chunk_size):
         u = rng.integers(0, 2, k).tolist()
         if marker_period == 1:
             x, n, N, K, q, U, X = MGCP_Encode_DNA_p1(u, l, c1, c2, t)
             y = DNA_iid_channel(x, Pd, Pi, Ps)
             start_time = time.perf_counter()
-            uhat = MGCP_Decode_DNA_p1(y, n, k, l, N, K, c1, c2, q, t, L, maxSize)
+            uhat = MGCP_Decode_DNA_p1(y, n, k, l, N, K, c1, c2, q, t, maxSize, P0, Pd, Pi, Ps)[0]
             decoding_time += time.perf_counter() - start_time
         else:
             x, n, N, K, q, U, X = MGCP_Encode_DNA_p2(u, l, c1, c2, t)
             y = DNA_iid_channel(x, Pd, Pi, Ps)
             start_time = time.perf_counter()
-            uhat = MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, L, maxSize, marker_period)
+            uhat = MGCP_Decode_DNA_p2(y, n, k, l, N, K, c1, c2, q, t, maxSize, marker_period, P0, Pd, Pi, Ps)[0]
             decoding_time += time.perf_counter() - start_time
 
         if uhat == u:
