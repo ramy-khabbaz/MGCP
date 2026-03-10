@@ -1,0 +1,2 @@
+# Include data files in source distributions
+recursive-include mgcp/data *.json

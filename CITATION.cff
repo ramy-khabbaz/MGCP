@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use this software in a published work, please cite it."
+title: "MGC+: Error-correcting code for Binary and DNA Data Storage applications"
+authors:
+  - given-names: "Ramy"
+    family-names: "Khabbaz"
+version: "1.1.0"
+date-released: "2025-10-28"
+url: "https://github.com/ramy-khabbaz/mgcp"
+keywords:
+  - DNA
+  - coding
+  - error-correction
+  - bioinformatics
+license: MIT
