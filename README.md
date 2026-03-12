@@ -81,13 +81,13 @@ Top-level help:
 mgcp --help
 ```
 
-Subcommands
+#### Subcommands
 
 - DNA-level: `mgcp dna ...`
 - Binary-level: `mgcp binary ...` (encode/decode and plotting)
 - File-level codec: `mgcp codec ...` (encode/decode files to/from DNA sequences)
 
-Examples
+#### Examples
 
 Output a detailed list of the MGC+ encoding parameters for different modules:
 
