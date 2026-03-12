@@ -103,7 +103,7 @@ Encode a single binary message into a binary codeword, with the block size (symb
 mgcp binary encode "0101010011110110" 4 4 2
 ```
 
-Recover the binary message from a corrupted sequence (the 6th and 7th bits are deleted and the 20th is substituted):
+Recover the binary message from a corrupted sequence (the 6th and 7th bits of the codeword are deleted and the 20th is substituted):
 
 ```bash
 mgcp binary decode "0101000011111011010111110111001010101100010010100101101100100011"
