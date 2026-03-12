@@ -138,7 +138,7 @@ mgcp codec decode "reads.txt" --input-path ./ --processes 4
 Both `mgcp dna` and `mgcp binary` include `plot` subcommands to generate FER vs code rate or FER vs channel error rate. Example:
 
 ```bash
-mgcp dna plot fer-vs-coderate 1000 126 1 "1,2,3,4" --pe 0.01 --num-iterations 500
+mgcp dna plot fer-vs-coderate 256 8 2 6,8,10,12,14 --pe 0.01 --num-iterations 1000
 ```
 
 ## Detailed module overview
