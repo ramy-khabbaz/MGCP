@@ -1,9 +1,9 @@
-# MGCP — MGC+ coding for DNA and binary channels
+# MGCP — MGC+ coding for DNA and binary channels with insertion, deletion, and substitution (IDS) errors
 
-MGCP is a Python package implementing the MGC+ family of encoders and decoders for both binary and DNA data. It contains:
+MGCP is a Python package implementing the Marker Guess & Checl Plus (MGC+) family of encoders and decoders for both binary and DNA sequences. It contains:
 
-- Encoders/decoders for binary streams and DNA sequences (`mgcp.binary`, `mgcp.dna`).
-- File-level codec that encodes binary files into DNA sequences and decodes them back from noisy reads (`mgcp.dna.codec`).
+- Encoders/decoders for binary and DNA sequences (`mgcp.binary`, `mgcp.dna`).
+- File-level codec that encodes a binary file into a collection of DNA sequences and decodes it back from noisy DNA reads (`mgcp.dna.codec`).
 - Utility modules for simulation, error models, and plotting (`mgcp.utils`).
 - Command-line interface (`mgcp/cli`) that exposes the main workflows.
 - Demos under `demo/` that show end-to-end examples (these require optional external tools).
@@ -22,8 +22,8 @@ This README documents installation, usage, CLI commands, demos and publishing gu
 
 ## Features
 
-- Encode/decode at the bit level and the DNA level using MGC+ algorithms.
-- Plotting helpers to benchmark FER vs coderate or error probability (both DNA and binary).
+- Encode/decode at the bit level and the DNA level using MGC+ codes.
+- Plotting helpers to benchmark frame error rate (FER) vs code 	rate or channel error rate (both DNA and binary).
 - A single CLI entrypoint (`mgcp`) with subcommands for DNA, binary, and file codec flows.
 - Demo scripts showing how to run full pipelines, clustering and consensus building.
 
@@ -89,43 +89,45 @@ Subcommands
 
 Examples
 
-Output a detailed list of the DNA-MGC+ encoding parameters:
+Output a detailed list of the MGC+ encoding parameters for different modules:
 
 ```bash
+mgcp binary encode --help
+mgcp dna encode --help
 mgcp codec encode --help
 ```
 
-Encode a single binary message, the block length is 8, 6 guess parities are added and the marker period is set to 2:
+Encode a single binary message into a binary codeword, with the block size (symbol length) set to 4 bits, 4 guess parities added, and the marker period set to 2:
 
 ```bash
-mgcp binary encode "0101010011110110" 8 6 2
+mgcp binary encode "0101010011110110" 4 4 2
 ```
 
-Decode the binary message back (the 7th bit is deleted and the 20th is substituted):
+Recover the binary message from a corrupted sequence (the 6th and 7th bits are deleted and the 20th is substituted):
 
 ```bash
-mgcp binary decode 0101010111101100011001001110111010001011000110011001100111111111010011100011100100001001101100111
+mgcp binary decode "0101000011111011010111110111001010101100010010100101101100100011"
 ```
 
-Encode a single binary message into a single DNA sequence:
+Encode a single binary message into a single DNA sequence, with the block size (symbol length) set to 4 bits, 4 guess parities added, and the marker period set to 0 (no markers):
 
 ```bash
-mgcp dna encode "0101010011110110" 4 4 1
+mgcp dna encode "0101010011110110" 4 4 0
 ```
 
-Decode the single DNA sequence back to binary (in this example the 4th and 14th nucliotides are deleted):
+Recover the binary message from a corrupted DNA sequence (substitutions: 2nd (T->A) and 17th (C->T) bases, deletions: 10th and 11th bases, insertion: 'G' is inserted at the 4th position):
 
 ```bash
-mgcp dna decode "TTACTAACGGACTCACGGACTGACTTACTCACCCTGATTGTGTT"
+mgcp dna decode "TATGAGGTCGGTTTCTCTGATTGTGTT"
 ```
 
-Encode a binary file to DNA sequences (file-level codec). Here, the file is encoded with a target oligo length of 120, the desired guess parities per encoded sequence is 4, markers were added and the set number of added redundant encoded sequences is 200:
+Encode a binary file into a collection of DNA sequences (file-level DNA-MGC+ codec). Here, the file is encoded with a target oligo length of 120, the inner code has 4 guess parities and doesn't include markers, and the outer codes adds 200 redundant sequences:
 
 ```bash
-mgcp codec encode data.bin 120 4 200 --input-path ./ --use-marker
+mgcp codec encode data.bin 120 4 200 --input-path ./ --no-marker
 ```
 
-Decode noisy DNA sequences (reads.txt) back to the file, 4 cores are used in parallel for decoding:
+Recover the binary file from noisy DNA reads (reads.txt) using 4 CPU cores for parallel decoding:
 
 ```bash
 mgcp codec decode reads.txt --input-path ./ --processes 4
@@ -133,7 +135,7 @@ mgcp codec decode reads.txt --input-path ./ --processes 4
 
 ### Plotting
 
-Both `mgcp dna` and `mgcp binary` include `plot` subcommands to generate FER vs coderate or FER vs Pe. Example:
+Both `mgcp dna` and `mgcp binary` include `plot` subcommands to generate FER vs code rate or FER vs channel error rate. Example:
 
 ```bash
 mgcp dna plot fer-vs-coderate 1000 126 1 "1,2,3,4" --pe 0.01 --num-iterations 500
@@ -143,7 +145,7 @@ mgcp dna plot fer-vs-coderate 1000 126 1 "1,2,3,4" --pe 0.01 --num-iterations 50
 
 - `mgcp.binary` — binary-level encoding/decoding primitives and utilities.
 - `mgcp.dna` — binary input to DNA sequence encoding, decoding, and helper pipelines.
-- `mgcp.dna.codec` — high-level file codec (binary file -> DNA sequences -> text) and reverse.
+- `mgcp.dna.codec` — high-level file codec (binary file -> DNA sequence and Noisy reads -> binary file).
 - `mgcp.utils` — helper modules: `tools.py` (random file generation, error models), `loader.py`, `binary_channel.py`, and plotting utilities.
 - `mgcp.cli` — `main.py` registers Typer application and subcommands implemented in `dna_cli.py`, `binary_cli.py`, `codec_cli.py`.
 
@@ -168,10 +170,10 @@ Note: check each tool's README for platform-specific dependencies and recommende
 ### Example demo outline
 
 1. `mgcp.dna.codec.encode` to generate `encoded_file.txt` (oligos list).
-2. `mgcp.utils.tools.error_generator` to simulate reads with Pd/Pi/Ps errors.
+2. `mgcp.utils.tools.error_generator` to generate reads with IDS errors.
 3. Run CD-HIT on the reads to cluster similar reads together (`cd-hit-est` or the `pycdhit` helper).
-4. For each cluster, run Kalign to MSA the reads and produce a consensus.
-5. Feed consensus reads into `mgcp.dna.codec.decode` to recover the original file.
+4. For each cluster, run Kalign to apply multiple sequence alignment to the reads and produce a consensus sequence.
+5. Feed consensus sequences into `mgcp.dna.codec.decode` to recover the original file.
 
 The demo scripts in `demo/` show concrete invocations. To run demos, install the demo extras and ensure `cd-hit-est` and `kalign` are installed on your system.
 
