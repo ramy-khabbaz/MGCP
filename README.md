@@ -121,16 +121,16 @@ Recover the binary message from a corrupted DNA sequence (substitutions: 2nd (T-
 mgcp dna decode "TATGAGGTCGGTTTCTCTGATTGTGTT"
 ```
 
-Encode a binary file into a collection of DNA sequences (file-level DNA-MGC+ codec). Here, the file is encoded with a target oligo length of 120, the inner code has 4 guess parities and doesn't include markers, and the outer codes adds 200 redundant sequences:
+Encode a binary file into a collection of DNA sequences (file-level DNA-MGC+ codec). Here, the file is encoded with a target oligo length of 120, the inner code has 4 guess parities and doesn't include markers, and the outer code adds 200 redundant sequences:
 
 ```bash
-mgcp codec encode data.bin 120 4 200 --input-path ./ --no-marker
+mgcp codec encode "data.bin" 120 4 200 --input-path ./ --no-marker
 ```
 
 Recover the binary file from noisy DNA reads (reads.txt) using 4 CPU cores for parallel decoding:
 
 ```bash
-mgcp codec decode reads.txt --input-path ./ --processes 4
+mgcp codec decode "reads.txt" --input-path ./ --processes 4
 ```
 
 ### Plotting
