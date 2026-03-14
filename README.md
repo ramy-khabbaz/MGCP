@@ -180,10 +180,22 @@ The demo scripts in `demo/` show concrete invocations. To run demos, install the
 
 ## Citing this work
 
-If you use MGCP in your research, please cite the project. A machine-readable citation file is provided in `CITATION.cff`.
+If you use MGCP in your research, please cite the following paper.
 
 BibTeX example:
+```bibtex
+@article{mgcp,
+  title   = {{DNA-MGC+}: A versatile codec for reliable and resource-efficient data storage on synthetic {DNA}},
+  author  = {Khabbaz, Ramy and Mateos, J{\'e}r{\'e}my and Antonini, Marc and {Kas Hanna}, Serge},
+  journal = {bioRxiv preprint,},
+  publisher = {Cold Spring Harbor Laboratory},
+  year    = {2026},
+  doi     = {10.64898/2026.03.11.711016},
+}
+```
 
+<!--
+A machine-readable citation file is provided in `CITATION.cff`.
 ```bibtex
 @software{mgcp2025,
 	title = {MGC+: Error-correcting code for Binary and DNA Data Storage applications},
@@ -193,6 +205,9 @@ BibTeX example:
 	version = {1.1.0},
 }
 ```
+-->
+
+
 
 ## License
 
