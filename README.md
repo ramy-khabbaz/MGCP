@@ -31,7 +31,7 @@ This README documents installation, usage, CLI commands, demos and publishing gu
 
 Prerequisites:
 
-- Python 3.9 or newer.
+- Python 3.10 or newer.
 - A working C/Python toolchain only if you need to build some optional native deps.
 
 clone and install locally:
