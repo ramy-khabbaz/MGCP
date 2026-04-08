@@ -61,7 +61,7 @@ def MGCP_Decode_Binary_p2(y, n, l, N, K, c1, c2, q, maxSize, marker_period, P0, 
     
     # Trellis Calculation
     
-    d = deletion_error_location(y, K//marker_period, delta, l*marker_period, 3, c1//marker_period, P0, Pd, Pi, Ps)
+    d = deletion_error_location(y, (K+c1)//marker_period, delta, l*marker_period, 3, c1//marker_period, P0, Pd, Pi, Ps)
     
     # Decode check parities
     seg = y[-len(codebook[0])+sum(d)-delta:]
@@ -231,7 +231,7 @@ def divide_vector(x, y, marker_size):
 # Function to locate deletion error
 def deletion_error_location(r, v, delta, block_size, l, c1, P0, Pd, Pi, Ps):
 
-    v += c1
+    # v += c1
 
     max_delta = abs(delta) + 2
     max_shift_per_block = max_delta
