@@ -69,7 +69,7 @@ def MGCP_Decode_DNA_p2(y, n, l, N, K, c1, c2, q, maxSize, marker_period, P0, Pd,
 
     num_blocks = K + c1 
     num_markers = math.ceil(num_blocks // 2)
-    d = deletion_error_location(y, K//marker_period, delta, l*marker_period, 2, c1//marker_period, P0, Pd, Pi, Ps)
+    d = deletion_error_location(y, (K+c1)//marker_period, delta, l*marker_period, 2, c1//marker_period, P0, Pd, Pi, Ps)
 
     # Decode check parities
     seg = y[-len(codebook[0])+sum(d)-delta:]
@@ -240,7 +240,7 @@ def divide_vector(x, y, marker_size):
 # Function to locate deletion error
 def deletion_error_location(r, v, delta, block_size, l, c1, P0, Pd, Pi, Ps):
 
-    v += c1
+    #v += c1
 
     max_delta = abs(delta) + 2
     max_shift_per_block = max_delta
