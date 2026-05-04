@@ -210,12 +210,15 @@ def calculate_best_k(max_length, c1, useMarker, l_in=8, l_out=16):
         raise ValueError(f"Invalid l_in={l_in}. It must not exceed 8.")
 
     def calc_length(k, c1):
-        if useMarker:
-            # Model with marker (similar to marker_period=2)
-            return (16 + 4 + k + ((k * 4) / (2 * l_in)) + c1 * l_in + (c1 / 2) * 4 + 24) / 2
+        if c1 != 0:
+            if useMarker:
+                # Model with marker (similar to marker_period=2)
+                return (16 + 4 + k + ((k * 4) / (2 * l_in)) + c1 * l_in + (c1 / 2) * 4 + 24) / 2
+            else:
+                # Model without marker
+                return (16 + k + 24 + c1 * l_in) / 2
         else:
-            # Model without marker
-            return (16 + k + 24 + c1 * l_in) / 2
+            return (16 + k) / 2
 
     best_k = None
     best_diff = float("inf")
@@ -225,7 +228,7 @@ def calculate_best_k(max_length, c1, useMarker, l_in=8, l_out=16):
         num_blocks = candidate_k // l_in
 
         # --- Condition for marker_period = 2 (useMarker=True) ---
-        if useMarker:
+        if useMarker and c1 != 0:
             total = num_blocks + c1
             if total % 2 != 0:
                 # Skip invalid total parity
@@ -356,15 +359,14 @@ def encode(file_name, max_length, inner_redundancy, outer_redundancy, input_path
 
     # Inner encode
     if inner_redundancy == 0:
+        N = K = q = None
         for idx, row in enumerate(u_outer):
-            n = None
-            N = None
-            K = None
-            q = None
-
             x = binary_to_dna(row)
             # l_out-bit index (MSB-first)
-            idx_bits = int_to_bits(idx, l_out)
+            if filtered:
+                idx_bits = int_to_bits(subset_idx[idx], l_out)
+            else:
+                idx_bits = int_to_bits(fwd_map[idx], l_out)
 
             # row is a numpy array of 0/1; turn prefix into np.array, then concatenate
             prefix = np.array(idx_bits, dtype=row.dtype)
@@ -372,9 +374,10 @@ def encode(file_name, max_length, inner_redundancy, outer_redundancy, input_path
             barcodes.append(bc)
             
             # prepend onto the encoded protein string
-            X_bc = bc + x 
+            X_bc = bc + x
             encoded_strands.append(X_bc)
         encoded_file = np.array(encoded_strands)
+        n = len(encoded_file[0])
     else:
         for idx, row in enumerate(u_outer):
             # l_out-bit index (MSB-first)
