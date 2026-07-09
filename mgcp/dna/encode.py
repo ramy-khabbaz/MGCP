@@ -20,7 +20,7 @@ def encode(binary_message, l, parities_count, marker_period, export_json=False, 
         export_path (str, optional): Path for exporting metadata JSON (default: current directory).
     
     Returns:
-        tuple: (encoded_message, metadata)
+        tuple: (codeword, metadata)
     """
 
     global _last_metadata
@@ -54,13 +54,13 @@ def encode(binary_message, l, parities_count, marker_period, export_json=False, 
     # --- Switch-case behavior depending on marker_period ---
     match marker_period:
         case 0:
-            encoded_message, n, N, K, q, U, X = GCP_Encode_DNA_brute(binary_message, l, parities_count, codebook)
+            codeword, n, N, K, q, U, X = GCP_Encode_DNA_brute(binary_message, l, parities_count, codebook)
 
         case 1:
-            encoded_message, n, N, K, q, U, X = MGCP_Encode_DNA_p1(binary_message, l, parities_count, codebook)
+            codeword, n, N, K, q, U, X = MGCP_Encode_DNA_p1(binary_message, l, parities_count, codebook)
 
         case 2:
-            encoded_message, n, N, K, q, U, X = MGCP_Encode_DNA_p2(binary_message, l, parities_count, codebook)
+            codeword, n, N, K, q, U, X = MGCP_Encode_DNA_p2(binary_message, l, parities_count, codebook)
 
     # --- After encoding ---
     metadata = {
@@ -83,4 +83,4 @@ def encode(binary_message, l, parities_count, marker_period, export_json=False, 
             _last_metadata = metadata
 
     # Return both encoded message and metadata in memory
-    return encoded_message, metadata
+    return codeword, metadata

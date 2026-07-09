@@ -1,10 +1,11 @@
 import typer
 from multiprocessing import cpu_count
 import numpy as np
+from typing import Optional
 from mgcp.dna import encode as dna_encode, decode as dna_decode
 from mgcp.dna.plotting import error_rate_vs_coderate, error_rate_vs_pe
 
-app = typer.Typer(help="Strand-level MGC+ DNA encode/decode and performance plots.")
+app = typer.Typer(help="MGC+ DNA encode/decode and performance plots.")
 
 
 # ======================== ENCODE / DECODE ======================== #
@@ -17,29 +18,46 @@ def encode_cli(
     marker_period: int = typer.Argument(..., help="Marker period (0, 1, or 2)."),
 ):
     """
-    Encode a binary message into a DNA strand sequence using MGC+ encoding.
+    Encode a binary message into a DNA sequence using MGC+ encoding.
     """
     binary_message = [int(b) for b in message.strip()]
-    encoded, metadata = dna_encode(binary_message, l, parities_count, marker_period, export_json=True)
+    codeword, metadata = dna_encode(binary_message, l, parities_count, marker_period, export_json=True)
 
-    typer.echo(f"Encoded DNA Strand:\n{''.join(encoded)}")
+    typer.echo(f"DNA codeword:\n{''.join(codeword)}")
 
 
 @app.command("decode")
 def decode_cli(
-    encoded: str = typer.Argument(..., help="DNA strand sequence (e.g., ACGT...)."),
+    codeword: str = typer.Argument(..., help="DNA sequence (e.g., ACGT...)."),
     meta_path: str = typer.Option(None, help="Path to metadata JSON (if not inline)."),
+    pd: Optional[float] = typer.Option(None, "--pd", help="Known deletion probability. Use together with --pi and --ps."),
+    pi: Optional[float] = typer.Option(None, "--pi", help="Known insertion probability. Use together with --pd and --ps."),
+    ps: Optional[float] = typer.Option(None, "--ps", help="Known substitution probability. Use together with --pd and --pi."),
 ):
     """
-    Decode a DNA strand back to binary using MGC+ decoding.
+    Decode a DNA sequence back to binary.
     """
 
     try:
-        decoded = dna_decode(encoded, meta_path=meta_path)
+        known_rates_supplied = any(rate is not None for rate in (pd, pi, ps))
+        decoded, diagnostics = dna_decode(
+            codeword,
+            meta_path=meta_path,
+            Pd=pd,
+            Pi=pi,
+            Ps=ps,
+            return_diagnostics=True,
+        )
         decoded_str = "".join(map(str, decoded))
-        typer.echo(f"Recovered binary message:\n{decoded_str}")
+        typer.echo(f"Decoded binary message:\n{decoded_str}")
+        if known_rates_supplied:
+            profile = diagnostics["selected_profile"]
+            typer.echo(
+                "Decoder profile mode: known "
+                f"(Pd={profile['Pd']:.6g}, Pi={profile['Pi']:.6g}, Ps={profile['Ps']:.6g})"
+            )
     except Exception as e:
-        typer.echo(f"Decoding failed.")
+        typer.echo(f"Decoding failed: {e}")
 
 # =========================== PLOTS =========================== #
 

@@ -1,12 +1,30 @@
 cff-version: 1.2.0
-message: "If you use this software in a published work, please cite it."
+message: "If you use MGCP in a published work, please cite the paper listed in preferred-citation."
 title: "MGC+: Error-correcting code for Binary and DNA Data Storage applications"
 authors:
   - given-names: "Ramy"
     family-names: "Khabbaz"
-version: "1.1.0"
-date-released: "2025-10-28"
+  - given-names: "Serge"
+    family-names: "Kas Hanna"
+version: "1.2.0"
+date-released: "2026-06-29"
 url: "https://github.com/ramy-khabbaz/mgcp"
+preferred-citation:
+  type: article
+  title: "DNA-MGC+: A versatile codec for reliable and resource-efficient data storage on synthetic DNA"
+  authors:
+    - given-names: "Ramy"
+      family-names: "Khabbaz"
+    - given-names: "Jérémy"
+      family-names: "Mateos"
+    - given-names: "Marc"
+      family-names: "Antonini"
+    - given-names: "Serge"
+      family-names: "Kas Hanna"
+  journal: "bioRxiv preprint"
+  publisher: "Cold Spring Harbor Laboratory"
+  year: 2026
+  doi: "10.64898/2026.03.11.711016"
 keywords:
   - DNA
   - coding

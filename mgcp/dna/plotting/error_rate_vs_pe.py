@@ -23,7 +23,7 @@ def _process_chunk(args):
     for _ in range(chunk_size):
         u = rng.integers(0, 2, message_length).tolist()
         encoded, meta = encode_dna(u, l, parities_count, marker_period)
-        noisy = DNA_iid_channel(encoded, Pd, Pi, Ps)
+        noisy, _ = DNA_iid_channel(encoded, Pd, Pi, Ps)
         start = time.perf_counter()
         decoded = decode_dna(noisy, meta)
         decoding_time += time.perf_counter() - start
