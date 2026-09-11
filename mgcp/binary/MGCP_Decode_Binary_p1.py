@@ -213,17 +213,20 @@ def divide_vector(x, y, marker_size):
 def deletion_error_location(r, v, delta, block_size, l, c1, P0, Pd, Pi, Ps):
 
     v += c1
-    max_shift_per_block = max_delta = abs(delta) + 2
+    max_delta = abs(delta) + 2
+    max_shift_per_block = min(max_delta, block_size + l)
 
     P = np.zeros((v + 1, 2 * max_delta + 1))
     Q = np.zeros((v + 1, 2 * max_delta + 1))
     P[0, max_delta] = 1  # Initial state with zero shift
 
     # Recalculate L matrix for current error probabilities
-    L = np.zeros((8, 2*max_delta + 1))
+    L = np.zeros((8, 2 * max_shift_per_block + 1))
     for m_prime in range(8):
-        for shift in range(-max_delta, max_delta + 1):
-            L[m_prime, shift + max_delta] = CalculateProbas(m_prime, shift, block_size, P0, Pd, Pi, Ps)
+        for shift in range(-max_shift_per_block, max_shift_per_block + 1):
+            L[m_prime, shift + max_shift_per_block] = CalculateProbas(
+                m_prime, shift, block_size, P0, Pd, Pi, Ps
+            )
 
     # Phase 1: Compute likelihoods and record preceding states
     for i in range(1, v + 1):
